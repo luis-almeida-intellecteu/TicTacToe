@@ -1,0 +1,47 @@
+module GameRoom.TicTacToeContracts.Pending where
+
+import DA.List.Total (unique)
+import DA.List (sort)
+import GameRoom.TicTacToeContracts.Match
+import GameRoom.GameLogic.Types
+
+template Pending
+    with
+        players: [Party]
+        gameMaster   : Party
+        alreadySigned: [Party]
+    where
+        signatory alreadySigned
+        let
+            matchMembers = gameMaster :: players
+            toSign = filter (`notElem` alreadySigned) matchMembers
+
+        observer matchMembers
+        ensure
+        -- Can't have duplicate signatories
+            unique alreadySigned
+
+        choice Sign : Either (ContractId Pending) (ContractId Match) 
+            with
+                signer : Party
+            controller signer
+                do
+                -- Check the controller is in the toSign list, and if they are, sign the Pending contract
+                assertMsg "Not in list of signers" (signer `elem` toSign)
+                recreatePending <- create this with alreadySigned = signer :: alreadySigned
+                try do
+                    match <- exercise recreatePending Finalize with signer 
+                    return (Right match)
+                catch
+                    (AssertionFailed msg) -> do
+                    debug msg
+                    return (Left recreatePending)
+
+        choice Finalize : ContractId Match
+            with
+                signer : Party
+            controller signer
+                do
+                -- Check that all the required signatories have signed Pending
+                assertMsg "Not all have signed yet" (sort alreadySigned == sort matchMembers)
+                create Match with players, gameMaster, gameType = newGame, winner = None

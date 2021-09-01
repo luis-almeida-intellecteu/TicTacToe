@@ -1,0 +1,26 @@
+module GameRoom.ConnectFourContracts.Match where
+
+import GameRoom.GameLogic.ConnectFour
+import GameRoom.ConnectFourContracts.Turn
+import DA.List.Total (elemIndex)
+
+template Match
+    with
+        players         : [Party]
+        gameMaster      : Party
+        gameType        : ConnectFour
+        winner          : Optional Party
+
+    where
+        signatory players, gameMaster
+
+        controller gameMaster can
+            StartGame : ContractId Turn 
+                do
+                    let
+                        playersWithMark = [(player, mark) | player <- players,
+                            let 
+                                Some l = elemIndex player players 
+                                mark = if l % 2 == 0 then Red else Yellow]
+                    create Turn with gameMaster, players = playersWithMark, gameType
+      

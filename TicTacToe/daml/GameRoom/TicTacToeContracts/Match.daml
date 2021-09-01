@@ -1,0 +1,26 @@
+module GameRoom.TicTacToeContracts.Match where
+
+import GameRoom.GameLogic.TicTacToe
+import GameRoom.TicTacToeContracts.Turn
+import DA.List.Total (elemIndex)
+
+template Match
+    with
+        players: [Party]
+        gameMaster   : Party
+        gameType : TicTacToe
+        winner: Optional Party
+
+    where
+        signatory players, gameMaster
+
+        controller gameMaster can
+            StartGame : ContractId Turn 
+                do
+                    let
+                        playersWithMark = [(player, mark) | player <- players,
+                            let 
+                                Some l = elemIndex player players 
+                                mark = if l % 2 == 0 then X else O]
+                    create Turn with gameMaster, players = playersWithMark, gameType
+      

@@ -1,0 +1,64 @@
+module Tests.TicTacToeTests where
+
+import Daml.Script
+import GameRoom.TicTacToeContracts.Match
+import GameRoom.TicTacToeContracts.Pending
+import GameRoom.TicTacToeContracts.Turn
+
+
+signTest = script do
+
+    playerA <- allocateParty "PlayerA"
+    playerB <- allocateParty "PlayerB"
+    playerC <- allocateParty "PlayerC"
+    gameMaster <- allocateParty "GM"
+
+  
+
+    let
+        players = [playerA, playerB]
+
+    pending <- submit gameMaster do
+        createCmd Pending with players, gameMaster, alreadySigned = [gameMaster]
+
+    (Left signPlayerAPending) <- submit playerA do
+        exerciseCmd pending Sign with signer = playerA 
+
+    (Right signPlayerBMatch) <- submit playerB do
+        exerciseCmd signPlayerAPending Sign with signer = playerB 
+
+    startGame <- submit gameMaster do
+        exerciseCmd signPlayerBMatch StartGame 
+
+    let
+        playerTurn turn pos player = exerciseCmd turn Play with pos, player
+        playerATurn turn pos = playerTurn turn pos playerA
+        playerBTurn turn pos = playerTurn turn pos playerB
+
+    (Left turn1) <- submit playerA do
+        playerATurn startGame (0,0)
+
+    --Test Double Play
+    submitMustFail playerA do
+        playerATurn turn1 (1,0)
+
+    --Play on Filled Square
+    submitMustFail playerB do
+        playerBTurn turn1 (0,0)
+
+    (Left turn2) <- submit playerB do
+        playerBTurn turn1 (1,0)
+    
+    (Left turn3) <- submit playerA do
+        playerATurn turn2 (0,1)
+
+    (Left turn4) <- submit playerB do
+        playerBTurn turn3 (1,1)
+    
+    (Right turn5Win) <- submit playerA do
+        playerATurn turn4 (0,2)
+    
+
+
+    return()
+

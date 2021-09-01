@@ -1,0 +1,13 @@
+module GameRoom.ConnectFourContracts.Victory where
+
+import GameRoom.GameLogic.TicTacToe
+
+template Victory
+    with
+        players     : [Party]
+        gameMaster  : Party
+        winner      : Party
+        gameType    : TicTacToe
+    where
+        signatory gameMaster
+        observer players

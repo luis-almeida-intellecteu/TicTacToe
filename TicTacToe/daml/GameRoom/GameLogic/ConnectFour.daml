@@ -1,0 +1,244 @@
+module GameRoom.GameLogic.ConnectFour where
+
+import DA.List as L (head, repeatedly)
+import GameRoom.GameLogic.Types
+import Daml.Script (script)
+import DA.Optional (fromSomeNote, isNone, fromSome)
+
+
+data Chip = Red | Yellow 
+    deriving (Show, Eq)
+data Square = Square (Pos, Optional Chip)
+    deriving (Show)
+data Table = Table [Square]
+    deriving (Show, Eq)
+data ConnectFour = ConnectFour Table 
+    deriving (Show, Eq)
+
+
+instance Game ConnectFour where
+    newGame = ConnectFour table
+        where
+            squares = [Square (Pos (x, y), None) | y <- [0..5], x <- [0..6] ]
+            table   = Table squares
+
+--LooksUp a Square in the table
+lookupInTable : Table -> Pos -> Optional Square
+lookupInTable (Table []) _ = None --Once Table is empty, return None
+lookupInTable (Table ((x@(Square (coords, _)))::xs)) pos --Look at first element of list, return x if found, else continue
+    | pos == coords = Some x
+    | otherwise = lookupInTable (Table xs) pos
+
+
+insertInTable : Table -> Square -> Table
+insertInTable (Table squares) square@(Square (_, ~(Some chip))) = 
+    Table $ L.repeatedly (\ (x::xs) -> do
+            let
+                acc = (,xs)
+
+            acc $   if x == square then 
+                        if isSquareChiped x then
+                            error "Square already filled"
+                        else square   
+                    else x
+        ) squares
+
+
+isSquareChiped : Square -> Bool
+isSquareChiped (Square (_, Some _))    = True
+isSquareChiped _                       = False
+
+
+play : Table -> Int -> Chip -> (Table, Square)
+play table pos chip = (t1, square)
+    where
+        square = Square (x, Some chip)
+        (Square (x,_)) = fromSomeNote "Column is filled" (getPlayablePosition pos table)
+        t1 = insertInTable table square
+
+checkWin : Table -> Square -> Chip -> Optional Chip
+checkWin table square chip 
+    |  4 <= (calculateLine horizontalLeft horizontalRight table square chip)        = Some chip
+    |  4 <= (calculateLine verticalUp verticalDown table square chip)               = Some chip
+    |  4 <= (calculateLine diagonalUpLeft diagonalUpRight table square chip)        = Some chip
+    |  4 <= (calculateLine diagonalDownLeft diagonalDownRight table square chip)    = Some chip
+    |  otherwise                                                                    = None
+
+getColumn : Int -> Table -> [Square]
+getColumn x (Table table) = 
+    filter (\ (Square ((Pos (posX, _)), _)) -> posX == x ) table
+
+removeFilledSquares : Int -> Table -> [Square]
+removeFilledSquares pos (Table []) = []
+removeFilledSquares pos table = filter (\ (Square (_, chip)) -> isNone chip ) squareList
+                                where squareList = getColumn pos table
+
+getPlayablePosition: Int -> Table -> Optional Square
+getPlayablePosition pos table = 
+    case x of 
+        [] -> None 
+        _ -> Some (head (x))
+    where   
+        x = removeFilledSquares pos table
+
+
+directionCheck: (Table -> Square -> Chip -> Int) -> (Pos -> Pos) -> Table -> Square -> Chip -> Int
+directionCheck function addCoords table (Square (pos@(Pos (posX, posY)), chip)) turnChip = 
+    case a of
+        Some val -> if ((fromSome chip) == turnChip) then 1 + (function table val turnChip) else 0
+        _ -> 0
+    where
+        a = lookupInTable table (addCoords pos)
+
+test = script do
+
+    
+    let
+        ConnectFour connectF = newGame 
+        sq30 = Square (Pos (3,0), Some Red)
+        sq20 = Square (Pos (2,0), Some Red)
+        sq10 = Square (Pos (1,0), Some Red)
+        sq00 = Square (Pos (0,0), Some Red)
+
+        sq31 = Square (Pos (3,1), Some Red)
+        sq21 = Square (Pos (2,1), Some Red)
+        sq11 = Square (Pos (1,1), Some Red)
+        sq01 = Square (Pos (0,1), Some Red)
+
+        sq32 = Square (Pos (3,2), Some Red)
+        sq22 = Square (Pos (2,2), Some Red)
+        sq12 = Square (Pos (1,2), Some Red)
+        sq02 = Square (Pos (0,2), Some Red)
+
+        sq33 = Square (Pos (3,3), Some Red)
+        sq23 = Square (Pos (2,3), Some Red)
+        sq13 = Square (Pos (1,3), Some Red)
+        sq03 = Square (Pos (0,3), Some Red)
+
+        sq34 = Square (Pos (3,4), Some Red)
+        sq24 = Square (Pos (2,4), Some Red)
+        sq14 = Square (Pos (1,4), Some Red)
+        sq04 = Square (Pos (0,4), Some Red)
+
+        sq25 = Square (Pos (2,5), Some Red)
+
+        --Table Insert
+        t1 = quickInsert connectF [sq30,sq20,sq10,sq00,sq31,sq21,sq11,sq01,sq32,sq12,sq02,sq33,sq23,sq13,sq03,sq34,sq24,sq14,sq04]
+        Square (Pos pos22@(x22 , _), _) = sq22
+
+        --Directions
+        left = horizontalLeft t1 sq22 Red
+        right = horizontalRight t1 sq22 Red
+        up = verticalUp t1 sq22 Red
+        down = verticalDown t1 sq22 Red
+        diagonalUL = diagonalUpLeft t1 sq22 Red
+        diagonalUR = diagonalUpRight t1 sq22 Red
+        diagonalDL = diagonalDownLeft t1 sq22 Red
+        diagonalDR = diagonalDownRight t1 sq22 Red
+
+        lineHorizontal = calculateLine horizontalLeft horizontalRight t1 sq22 Red
+        lineVertical = calculateLine verticalUp verticalDown t1 sq22 Red
+        lineDiagonalUp = calculateLine diagonalUpLeft diagonalUpRight t1 sq22 Red
+        lineDiagonalDown = calculateLine diagonalDownLeft diagonalDownRight t1 sq22 Red
+
+    --debug (removeFilledSquares x22 t1)
+    --debug (getPlayablePosition x22 t1)
+    --debug (play t1 2 Red)   
+    --debug t1
+    debug (checkWin t1 sq22 Yellow)
+    debug [(up, down), (left,right), (diagonalUL, diagonalUR), (diagonalDL, diagonalDR)]
+    debug lineHorizontal
+    debug lineVertical
+    debug lineDiagonalUp
+    debug lineDiagonalDown
+
+
+
+    return()
+
+  
+
+joinCoords : ([a],[a]) -> ([a],[a]) -> ([a],[a])
+joinCoords (x1, y1) (x2, y2) = (x1 ++ x2, y1 ++ y2) 
+
+
+joinCoords3 : ([a],[a],[a]) -> ([a],[a],[a]) -> ([a],[a],[a])
+joinCoords3 (x1, y1, z1) (x2, y2, z2) = 
+    (x1 ++ x2, y1 ++ y2, z1 ++ z2) 
+
+
+instance Ord Square where
+    compare (Square (posX, _)) (Square (posY, _))
+        | posX > posY   = GT
+        | posX < posY   = LT
+        | otherwise     = EQ
+
+instance Eq Square where
+    (==) = ((EQ ==) .) . compare
+
+
+quickInsert : Table -> [Square] -> Table
+quickInsert table []        = table
+quickInsert table (x::xs)   = insertInTable (quickInsert table xs) x
+
+verticalDown : Table -> Square -> Chip -> Int
+verticalDown _ (Square (Pos (_ , -1), _)) _ = 1
+verticalDown _ (Square (Pos (_ , 6), _)) _ = 0
+verticalDown _ (Square (_, None)) _ = 0 
+verticalDown table square turnChip = directionCheck verticalDown (`addCoords` (0,-1)) table square turnChip
+
+verticalUp : Table -> Square -> Chip -> Int
+verticalUp _ (Square (Pos (_ , -1), _)) _ = 0
+verticalUp _ (Square (Pos (_ , 6), _)) _ = 1
+verticalUp _ (Square (_, None)) _ = 0 
+verticalUp table square turnChip = directionCheck verticalUp (`addCoords` (0,1)) table square turnChip
+
+horizontalLeft : Table -> Square -> Chip -> Int
+horizontalLeft _ (Square (Pos (-1 , _), _)) _ = 1
+horizontalLeft _ (Square (Pos (7 , _), _)) _ = 0
+horizontalLeft _ (Square (_, None)) _ = 0 
+horizontalLeft table square turnChip = directionCheck horizontalLeft (`addCoords` (-1,0)) table square turnChip
+
+horizontalRight : Table -> Square -> Chip -> Int
+horizontalRight _ (Square (Pos (-1 , _), _)) _ = 0
+horizontalRight _ (Square (Pos (7 , _), _)) _ = 1
+horizontalRight _ (Square (_, None)) _ = 0 
+horizontalRight table square turnChip = directionCheck horizontalRight (`addCoords` (1,0)) table square turnChip
+
+diagonalUpRight : Table -> Square -> Chip -> Int
+diagonalUpRight _ (Square (Pos (-1 , _), _)) _ = 0
+diagonalUpRight _ (Square (Pos (7 , _), _)) _ = 1
+diagonalUpRight _ (Square (Pos (_ , -1), _)) _ = 0
+diagonalUpRight _ (Square (Pos (_ , 6), _)) _ = 1
+diagonalUpRight _ (Square (_, None)) _ = 0 
+diagonalUpRight table square turnChip = directionCheck diagonalUpRight (`addCoords` (1,1)) table square turnChip
+
+diagonalUpLeft : Table -> Square -> Chip -> Int
+diagonalUpLeft _ (Square (Pos (-1 , _), _)) _ = 1
+diagonalUpLeft _ (Square (Pos (7 , _), _)) _ = 0
+diagonalUpLeft _ (Square (Pos (_ , -1), _)) _ = 0
+diagonalUpLeft _ (Square (Pos (_ , 6), _)) _ = 1
+diagonalUpLeft _ (Square (_, None)) _ = 0 
+diagonalUpLeft table square turnChip = directionCheck diagonalUpRight (`addCoords` (-1,1)) table square turnChip
+
+diagonalDownRight : Table -> Square -> Chip -> Int
+diagonalDownRight _ (Square (Pos (-1 , _), _)) _ = 0
+diagonalDownRight _ (Square (Pos (7 , _), _)) _ = 1
+diagonalDownRight _ (Square (Pos (_ , -1), _)) _ = 1
+diagonalDownRight _ (Square (Pos (_ , 6), _)) _ = 0
+diagonalDownRight _ (Square (_, None)) _ = 0 
+diagonalDownRight table square turnChip = directionCheck diagonalUpRight (`addCoords` (1,-1)) table square turnChip
+
+diagonalDownLeft : Table -> Square -> Chip -> Int
+diagonalDownLeft _ (Square (Pos (-1 , _), _)) _ = 1
+diagonalDownLeft _ (Square (Pos (7 , _), _)) _ = 0
+diagonalDownLeft _ (Square (Pos (_ , -1), _)) _ = 1
+diagonalDownLeft _ (Square (Pos (_ , 6), _)) _ = 0
+diagonalDownLeft _ (Square (_, None)) _ = 0 
+diagonalDownLeft table square turnChip = directionCheck diagonalUpRight (`addCoords` (-1,-1)) table square turnChip
+
+calculateLine : (Table -> Square -> Chip -> Int) -> (Table -> Square -> Chip -> Int) -> Table -> Square -> Chip -> Int
+calculateLine direction1 direction2 table square turnChip = (direction1 table square turnChip)  + (direction2 table square turnChip)
+
+addCoords : Pos -> (Int, Int) -> Pos
+addCoords (Pos (x1, y1)) (x2, y2) = Pos (x1 + x2, y1 + y2)

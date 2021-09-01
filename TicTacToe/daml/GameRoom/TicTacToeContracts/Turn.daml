@@ -1,0 +1,39 @@
+module GameRoom.TicTacToeContracts.Turn where
+
+import GameRoom.GameLogic.TicTacToe
+import GameRoom.GameLogic.Types
+import GameRoom.TicTacToeContracts.Victory
+import DA.Optional.Total (isSome)
+
+template Turn
+    with 
+        players : [(Party, Mark)] --Player/Mark Tuple
+        gameMaster : Party
+        gameType : TicTacToe
+    where
+        signatory gameMaster
+        observer playerList --List of Players
+        let  
+            --toX (a,b) = a -- Function Definition
+            playerList = map fst players
+            x::xs = playerList
+            locker@(lPlayer, lMark)::remaining = players
+        ensure not $ null players
+
+        choice Play : Either (ContractId Turn) (ContractId Victory)  
+            with
+                player : Party
+                pos : (Int, Int)
+            controller player    
+            do
+                assertMsg "not this player's turn" (lPlayer == player)
+                let 
+                    (TicTacToe table) = gameType
+                    move = play table (Pos pos) lMark
+                    winCondition = checkWin move 
+                if isSome winCondition then do
+                    r <- create Victory with players = xs++[x], gameMaster, gameType = newGame, winner = player
+                    return (Right r)
+                else do
+                    l <- create this with players = remaining ++ [locker], gameType = TicTacToe move
+                    return (Left l)

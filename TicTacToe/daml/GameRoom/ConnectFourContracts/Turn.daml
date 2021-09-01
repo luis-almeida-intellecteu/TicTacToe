@@ -1,0 +1,40 @@
+module GameRoom.ConnectFourContracts.Turn where
+
+import GameRoom.GameLogic.ConnectFour
+import GameRoom.GameLogic.Types
+import GameRoom.ConnectFourContracts.Victory
+import DA.Optional.Total (isSome)
+
+template Turn
+    with 
+        players : [(Party, Chip)] 
+        gameMaster : Party
+        gameType : ConnectFour
+    where
+        signatory gameMaster
+        observer playerList --List of Players
+        let  
+            --toX (a,b) = a -- Function Definition
+            playerList = map fst players
+            x::xs = playerList
+            locker@(lPlayer, lChip)::remaining = players
+        ensure not $ null players
+
+        choice Play : Either (ContractId Turn) (ContractId Victory)  
+            with
+                player : Party
+                pos : Int
+            controller player    
+            do
+                assertMsg "not this player's turn" (lPlayer == player)
+                let 
+                    (ConnectFour table) = gameType
+                    (move, position) = play table pos lChip
+                    winCondition = checkWin move position lChip
+                    
+                if isSome winCondition then do
+                    r <- create Victory with players = xs++[x], gameMaster, gameType = newGame, winner = player
+                    return (Right r)
+                else do
+                    l <- create this with players = remaining ++ [locker], gameType = ConnectFour move
+                    return (Left l)

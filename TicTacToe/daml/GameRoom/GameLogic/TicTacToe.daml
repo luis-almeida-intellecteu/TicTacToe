@@ -1,0 +1,129 @@
+module GameRoom.GameLogic.TicTacToe where
+
+import DA.List as L (head, repeatedly)
+import GameRoom.GameLogic.Types
+
+data Mark = X | O
+    deriving (Show, Eq)
+data Square = Square (Pos, Optional Mark)
+    deriving (Show)
+data Table = Table [Square]
+    deriving (Show, Eq)
+data TicTacToe = TicTacToe Table 
+    deriving (Show, Eq)
+
+
+instance Game TicTacToe where
+    newGame = TicTacToe table
+        where
+            squares = [Square (Pos (x, y), None) | x <- [0..2], y <- [0..2]]
+            table   = Table squares
+
+
+lookupInTable : Table -> Pos -> Optional Square
+lookupInTable (Table []) _ = None
+lookupInTable (Table ((x@(Square (coords, _)))::xs)) pos
+    | pos == coords = Some x
+    | otherwise = lookupInTable (Table xs) pos
+
+insertInTable : Table -> Square -> Table
+insertInTable (Table squares) square@(Square (_, ~(Some mark))) = 
+    Table $ L.repeatedly (\ (x::xs) -> do
+            let
+                acc = (,xs)
+
+            acc $   if x == square then 
+                        if isSquareMarked x then
+                            error "Square already filled"
+                        else square   
+                    else x
+        ) squares
+
+
+isSquareMarked : Square -> Bool
+isSquareMarked (Square (_, Some _))    = True
+isSquareMarked _                       = False
+
+
+play : Table -> Pos -> Mark -> Table
+play table pos mark = insertInTable table square
+    where
+        square = Square (pos, Some mark)
+
+
+verticalFunction : Square -> ([Optional Mark], [Optional Mark], [Optional Mark])
+verticalFunction (Square (Pos (_, 0), mark))  = ([mark],[],[])
+verticalFunction (Square (Pos (_, 1), mark))  = ([],[mark],[])
+verticalFunction (Square (Pos (_, 2), mark))  = ([],[],[mark])
+verticalFunction _                            = ([],[],[])
+
+
+horizontalFunction : Square -> ([Optional Mark], [Optional Mark], [Optional Mark])
+horizontalFunction (Square (Pos (0, _), mark))    = ([mark],[],[])
+horizontalFunction (Square (Pos (1, _), mark))    = ([],[mark],[])
+horizontalFunction (Square (Pos (2, _), mark))    = ([],[],[mark]) 
+horizontalFunction _                              = ([],[],[])
+
+
+diagonalFunction : Square -> ([Optional Mark], [Optional Mark])
+diagonalFunction (Square (Pos (0, 0), mark))    = ([mark], [])
+diagonalFunction (Square (Pos (2, 2), mark))    = ([mark], [])
+diagonalFunction (Square (Pos (1, 1), mark))    = ([mark], [mark])
+diagonalFunction (Square (Pos (0, 2), mark))    = ([], [mark])
+diagonalFunction (Square (Pos (2, 0), mark))    = ([], [mark])
+diagonalFunction (Square (Pos (x, y), mark))    = ([],[])
+       
+
+joinCoords : ([a],[a]) -> ([a],[a]) -> ([a],[a])
+joinCoords (x1, y1) (x2, y2) = (x1 ++ x2, y1 ++ y2) 
+
+
+joinCoords3 : ([a],[a],[a]) -> ([a],[a],[a]) -> ([a],[a],[a])
+joinCoords3 (x1, y1, z1) (x2, y2, z2) = 
+    (x1 ++ x2, y1 ++ y2, z1 ++ z2) 
+
+
+
+checkWin  : Table -> Optional Mark
+checkWin table@(Table squares)
+    | compOpt diag1 = L.head diag1
+    | compOpt diag2 = L.head diag2
+    | compOpt line1 = L.head line1
+    | compOpt line2 = L.head line2
+    | compOpt line3 = L.head line3
+    | compOpt col1  = L.head col1
+    | compOpt col2  = L.head col2
+    | compOpt col3  = L.head col3
+    | otherwise     = None
+    
+    where
+        transformLines acc          = joinCoords3 acc . horizontalFunction
+        transformcols acc           = joinCoords3 acc . verticalFunction
+        transform acc               = joinCoords acc . diagonalFunction
+        (line1, line2, line3)       = foldl transformLines ([],[],[]) squares
+        a = foldl (\ acc x -> 
+            joinCoords3 acc (horizontalFunction x)
+            ) ([],[],[]) squares
+        (col1, col2, col3)          = foldl transformcols ([],[],[]) squares
+        (diag1, diag2)              = foldl transform ([],[]) squares
+        compOpt [opt1, opt2, opt3] = opt1 == opt2 && opt2 == opt3
+        compOpt _                  = error $ "Invalid number of marks"
+
+{-
+     (0,0)(1,0)(2,0) -> Marks
+-}
+    
+
+instance Ord Square where
+    compare (Square (posX, _)) (Square (posY, _))
+        | posX > posY   = GT
+        | posX < posY   = LT
+        | otherwise     = EQ
+
+instance Eq Square where
+    (==) = ((EQ ==) .) . compare
+
+
+quickInsert : Table -> [Square] -> Table
+quickInsert table []        = table
+quickInsert table (x::xs)   = insertInTable (quickInsert table xs) x

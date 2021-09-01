@@ -1,0 +1,9 @@
+module GameRoom.GameLogic.Types where
+
+class Game a where
+    newGame : a
+
+data Pos = Pos (Int, Int) 
+    deriving (Show, Eq, Ord)
+
+

@@ -1,0 +1,44 @@
+module Tests.ConnectFourTests where
+
+import Daml.Script
+import GameRoom.ConnectFourContracts.Match
+import GameRoom.ConnectFourContracts.Pending
+import GameRoom.ConnectFourContracts.Turn
+
+
+signTest = script do
+
+    playerA <- allocateParty "PlayerA"
+    playerB <- allocateParty "PlayerB"
+    playerC <- allocateParty "PlayerC"
+    gameMaster <- allocateParty "GM"
+
+  
+
+    let
+        players = [playerA, playerB]
+
+    pending <- submit gameMaster do createCmd Pending with players, gameMaster, alreadySigned = [gameMaster]
+
+    (Left signPlayerAPending) <- submit playerA do exerciseCmd pending Sign with signer = playerA 
+
+    (Right signPlayerBMatch) <- submit playerB do exerciseCmd signPlayerAPending Sign with signer = playerB 
+
+    startGame <- submit gameMaster do exerciseCmd signPlayerBMatch StartGame 
+
+    let
+        playerTurn turn pos player = exerciseCmd turn Play with pos, player
+        
+
+    (Left turn1) <- submit playerA do playerTurn startGame 2 playerA
+    (Left turn2) <- submit playerB do playerTurn turn1 3 playerB
+    
+    (Left turn3) <- submit playerA do playerTurn turn2 2 playerA
+    (Left turn4) <- submit playerB do playerTurn turn3 3 playerB
+
+    (Left turn5) <- submit playerA do playerTurn turn4 2 playerA
+    (Left turn6) <- submit playerB do playerTurn turn5 3 playerB
+
+    (Right turn7) <- submit playerA do playerTurn turn6 2 playerA
+
+    return()
